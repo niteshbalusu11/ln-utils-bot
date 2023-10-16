@@ -1,6 +1,6 @@
 # Lightning Utilites Bot
 
-- Built this as an alternative to @LNPingBot but utilities bot also can also probe a node.
+- Built https://t.me/ln_utils_bot as an alternative to @LNPingBot but utilities bot also can also probe a node.
 - LNPingBot has been unreliable for me so built this as an alernative.
 
 ## Self-hosting Steps
