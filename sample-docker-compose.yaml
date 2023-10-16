@@ -1,7 +1,7 @@
 version: "3.9"
 services:
 
-  rustdress:
+  ln-utils-bot:
     container_name: ln-utils-bot
     image: ln-utils-bot:latest
     depends_on: [lnd]
