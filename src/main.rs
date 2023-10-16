@@ -1,4 +1,5 @@
 mod bot;
+mod constants;
 mod get_lnd;
 mod utils;
 use anyhow::Context;
@@ -16,8 +17,6 @@ async fn main() -> anyhow::Result<()> {
     env::set_var("RUST_LOG", log_level);
 
     pretty_env_logger::init();
-
-    log::info!("Starting command bot...");
 
     let mut client = get_lnd::get_lnd()
         .await

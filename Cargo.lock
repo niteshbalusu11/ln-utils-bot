@@ -861,9 +861,9 @@ checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
 
 [[package]]
 name = "lightning-probing"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19bd59c92a5eb05736b634b047c9d97c15f1a439782b2b1548ebad8f1e335ec0"
+checksum = "055c93e5ef420a09c612d719b2824b39af763ad00b34f26f0656c98c1f377d63"
 dependencies = [
  "anyhow",
  "dotenv",
