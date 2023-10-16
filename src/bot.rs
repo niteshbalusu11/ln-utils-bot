@@ -20,9 +20,9 @@ enum Command {
     Start,
     #[command(description = "Help Command")]
     Help,
-    #[command(description = "Connect to a peer")]
+    #[command(description = "Connect to a peer /connect <pubkey@uri>")]
     Connect(String),
-    #[command(description = "Probe a peer")]
+    #[command(description = "Probe a peer /probe <pubkey>")]
     Probe(String),
 }
 
