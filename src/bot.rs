@@ -43,8 +43,6 @@ impl InitBot {
     }
 
     async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
-        let mut client = get_lnd().await.expect("failed to get client");
-
         match cmd {
             Command::Start => bot.send_message(msg.chat.id, WELCOME_MESSAGE).await?,
             Command::Help => {
@@ -52,6 +50,8 @@ impl InitBot {
                     .await?
             }
             Command::Connect(uri) => {
+                let mut client = get_lnd().await.expect("failed to get client");
+
                 bot.send_message(msg.chat.id, PEER_CONNECT_WAIT_MESSAGE)
                     .await?;
 
@@ -74,6 +74,8 @@ impl InitBot {
                 bot.send_message(msg.chat.id, message).await?
             }
             Command::Probe(pubkey) => {
+                let client = get_lnd().await.expect("failed to get client");
+
                 bot.send_message(msg.chat.id, PROBE_WAIT_MESSAGE).await?;
 
                 let start = Instant::now();
