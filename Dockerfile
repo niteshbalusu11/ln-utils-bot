@@ -26,7 +26,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary from the builder stage
-COPY --from=builder /app/target/release/rustdress /usr/local/bin/
+COPY --from=builder /app/target/release/ln-utils-bot /usr/local/bin/
 
 # Run the Rust binary
-CMD ["rustdress"]
+CMD ["ln-utils-bot"]
