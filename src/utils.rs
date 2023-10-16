@@ -68,7 +68,7 @@ pub async fn probe_peer(
             outgoing_pubkeys: None,
             payment_request: None,
             probe_amount_sat: Some(1),
-            timeout_seconds: Some(60),
+            timeout_seconds: Some(20),
         }
     })
     .await;
