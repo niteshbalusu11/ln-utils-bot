@@ -50,57 +50,59 @@ impl InitBot {
                     .await?
             }
             Command::Connect(uri) => {
-                let mut client = get_lnd().await.expect("failed to get client");
+                let _ = tokio::spawn(async move {
+                    let mut client = get_lnd().await.expect("failed to get client");
 
-                bot.send_message(msg.chat.id, PEER_CONNECT_WAIT_MESSAGE)
-                    .await?;
+                    bot.send_message(msg.chat.id, PEER_CONNECT_WAIT_MESSAGE)
+                        .await?;
 
-                let start = Instant::now();
-                let connect_result = connect_peer(&mut client, &uri).await;
-                let elapsed = start.elapsed().as_secs();
+                    let start = Instant::now();
+                    let connect_result = connect_peer(&mut client, &uri).await;
+                    let elapsed = start.elapsed().as_secs();
 
-                let message = match connect_result {
-                    Ok(_) => format!("{} {} seconds", PEER_CONNECT_SUCCESS_MESSAGE, elapsed),
-                    Err(e) => {
-                        log::error!("Failed to connect to peer {:?}", e);
-                        format!(
-                            "{} seconds: {:?}",
-                            PEER_CONNECT_FAILURE_MESSAGE,
-                            e.root_cause()
-                        )
-                    }
-                };
+                    let message = match connect_result {
+                        Ok(_) => format!("{} {} seconds", PEER_CONNECT_SUCCESS_MESSAGE, elapsed),
+                        Err(e) => {
+                            log::error!("Failed to connect to peer {:?}", e);
+                            format!("{} {:?}", PEER_CONNECT_FAILURE_MESSAGE, e.root_cause())
+                        }
+                    };
 
-                bot.send_message(msg.chat.id, message).await?
+                    bot.send_message(msg.chat.id, message).await
+                });
+
+                return Ok(());
             }
             Command::Probe(pubkey) => {
-                let client = get_lnd().await.expect("failed to get client");
+                let _ = tokio::spawn(async move {
+                    let client = get_lnd().await.expect("failed to get client");
+                    let chat_id = msg.chat.id;
+                    bot.send_message(chat_id, PROBE_WAIT_MESSAGE).await?;
 
-                bot.send_message(msg.chat.id, PROBE_WAIT_MESSAGE).await?;
+                    let start = Instant::now();
+                    let probe_result = probe_peer(client, &pubkey).await;
+                    let elapsed = start.elapsed().as_secs();
 
-                let start = Instant::now();
-                let probe_result = probe_peer(client, &pubkey).await;
-                let elapsed = start.elapsed().as_secs();
-
-                let message = match probe_result {
-                    Ok(n) => {
-                        log::info!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed);
-
-                        if n.is_probe_success {
-                            format!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed)
-                        } else {
-                            format!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason)
+                    let message = match probe_result {
+                        Ok(n) => {
+                            if n.is_probe_success {
+                                log::info!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed);
+                                format!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed)
+                            } else {
+                                log::info!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason);
+                                format!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason)
+                            }
                         }
-                    }
+                        Err(e) => {
+                            log::error!("Failed to probe peer {:?}", e);
+                            format!("{}: {:?}", PROBE_FAILURE_MESSAGE, e)
+                        }
+                    };
 
-                    Err(e) => {
-                        log::error!("Failed to probe peer {:?}", e);
-                        format!("{}: {:?}", PROBE_FAILURE_MESSAGE, e)
-                    }
-                };
+                    bot.send_message(chat_id, format!("{:?}", message)).await
+                });
 
-                bot.send_message(msg.chat.id, format!("{:?}", message))
-                    .await?
+                return Ok(());
             }
         };
 
