@@ -1,18 +1,27 @@
-use anyhow::ensure;
+use std::time::Instant;
+
+use anyhow::{bail, ensure};
 use lightning_probing::{probe_destination, ProbeDestination};
-use lnd_grpc_rust::lnrpc::{self, ConnectPeerRequest, DisconnectPeerRequest, LightningAddress};
+use lnd_grpc_rust::lnrpc::{ConnectPeerRequest, DisconnectPeerRequest, LightningAddress};
 
 use anyhow::Result;
 
-pub async fn connect_peer(
+use crate::constants::{
+    PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_SUCCESS_MESSAGE, PROBE_FAILURE_MESSAGE,
+    PROBE_SUCCESS_MESSAGE,
+};
+
+pub async fn get_connect_peer_message(
     client: &mut lnd_grpc_rust::LndClient,
     addr: &str,
-) -> Result<lnrpc::ConnectPeerResponse> {
+) -> anyhow::Result<String> {
     let (pubkey, host) = parse_address(addr)?;
 
     disconnect_peer(client, &pubkey).await;
 
     log::info!("Connecting to peer {}", &pubkey);
+
+    let start = Instant::now();
 
     let address = LightningAddress {
         host: host.clone(),
@@ -25,12 +34,21 @@ pub async fn connect_peer(
             addr: Some(address),
             ..Default::default()
         })
-        .await?
-        .into_inner();
+        .await;
+
+    let elapsed = start.elapsed().as_secs();
+
+    let message = match res {
+        Ok(_) => format!("{} {} seconds", PEER_CONNECT_SUCCESS_MESSAGE, elapsed),
+        Err(e) => {
+            log::error!("Failed to connect to peer {:?}", e);
+            format!("{} {:?}", PEER_CONNECT_FAILURE_MESSAGE, e)
+        }
+    };
 
     disconnect_peer(client, &pubkey).await;
 
-    Ok(res)
+    Ok(message)
 }
 
 fn parse_address(addr: &str) -> Result<(String, String)> {
@@ -54,10 +72,16 @@ pub async fn disconnect_peer(client: &mut lnd_grpc_rust::LndClient, pubkey: &str
         .await;
 }
 
-pub async fn probe_peer(
+pub async fn get_probe_peer_message(
     client: lnd_grpc_rust::LndClient,
     pubkey: &str,
-) -> anyhow::Result<lightning_probing::ProbeResult> {
+) -> anyhow::Result<String> {
+    if is_public_key(pubkey).is_err() || is_public_key(pubkey).unwrap() == false {
+        bail!("ExpectedValidHexPublicKey".to_string());
+    }
+
+    let start = Instant::now();
+
     let res = probe_destination({
         ProbeDestination {
             client,
@@ -73,5 +97,28 @@ pub async fn probe_peer(
     })
     .await;
 
-    return res;
+    let elapsed = start.elapsed().as_secs();
+
+    let message = match res {
+        Ok(n) => {
+            if n.is_probe_success {
+                log::info!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed);
+                format!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed)
+            } else {
+                log::info!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason);
+                format!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason)
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to probe peer {:?}", e);
+            format!("{}: {:?}", PROBE_FAILURE_MESSAGE, e)
+        }
+    };
+
+    return Ok(message);
+}
+
+fn is_public_key(n: &str) -> anyhow::Result<bool, regex::Error> {
+    let re = regex::Regex::new(r"(?i)^0[2-3][0-9A-F]{64}$")?;
+    Ok(re.is_match(n))
 }

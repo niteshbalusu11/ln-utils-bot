@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to connect to Lnd");
 
-    InitBot { client }.init().await;
+    InitBot {}.init().await;
 
     return Ok(());
 }

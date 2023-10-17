@@ -1,13 +1,12 @@
-use std::time::Instant;
 use teloxide::{prelude::*, utils::command::BotCommands};
 
 use crate::{
     constants::{
-        PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_SUCCESS_MESSAGE, PEER_CONNECT_WAIT_MESSAGE,
-        PROBE_FAILURE_MESSAGE, PROBE_SUCCESS_MESSAGE, PROBE_WAIT_MESSAGE, WELCOME_MESSAGE,
+        PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_WAIT_MESSAGE, PROBE_FAILURE_MESSAGE,
+        PROBE_WAIT_MESSAGE, WELCOME_MESSAGE,
     },
     get_lnd::get_lnd,
-    utils::{connect_peer, probe_peer},
+    utils::{get_connect_peer_message, get_probe_peer_message},
 };
 
 #[derive(BotCommands, Clone)]
@@ -26,9 +25,7 @@ enum Command {
     Probe(String),
 }
 
-pub struct InitBot {
-    pub client: lnd_grpc_rust::LndClient,
-}
+pub struct InitBot {}
 
 impl InitBot {
     pub async fn init(&self) {
@@ -56,15 +53,13 @@ impl InitBot {
                     bot.send_message(msg.chat.id, PEER_CONNECT_WAIT_MESSAGE)
                         .await?;
 
-                    let start = Instant::now();
-                    let connect_result = connect_peer(&mut client, &uri).await;
-                    let elapsed = start.elapsed().as_secs();
+                    let message = get_connect_peer_message(&mut client, &uri).await;
 
-                    let message = match connect_result {
-                        Ok(_) => format!("{} {} seconds", PEER_CONNECT_SUCCESS_MESSAGE, elapsed),
+                    let message = match message {
+                        Ok(n) => n,
                         Err(e) => {
                             log::error!("Failed to connect to peer {:?}", e);
-                            format!("{} {:?}", PEER_CONNECT_FAILURE_MESSAGE, e.root_cause())
+                            format!("{} {:?}", PEER_CONNECT_FAILURE_MESSAGE, e)
                         }
                     };
 
@@ -79,20 +74,10 @@ impl InitBot {
                     let chat_id = msg.chat.id;
                     bot.send_message(chat_id, PROBE_WAIT_MESSAGE).await?;
 
-                    let start = Instant::now();
-                    let probe_result = probe_peer(client, &pubkey).await;
-                    let elapsed = start.elapsed().as_secs();
+                    let message = get_probe_peer_message(client, &pubkey).await;
 
-                    let message = match probe_result {
-                        Ok(n) => {
-                            if n.is_probe_success {
-                                log::info!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed);
-                                format!("{} {} seconds", PROBE_SUCCESS_MESSAGE, elapsed)
-                            } else {
-                                log::info!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason);
-                                format!("{} {:?}", PROBE_FAILURE_MESSAGE, n.failure_reason)
-                            }
-                        }
+                    let message = match message {
+                        Ok(n) => n,
                         Err(e) => {
                             log::error!("Failed to probe peer {:?}", e);
                             format!("{}: {:?}", PROBE_FAILURE_MESSAGE, e)
