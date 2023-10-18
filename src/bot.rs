@@ -2,11 +2,11 @@ use teloxide::{prelude::*, utils::command::BotCommands};
 
 use crate::{
     constants::{
-        PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_WAIT_MESSAGE, PROBE_FAILURE_MESSAGE,
-        PROBE_WAIT_MESSAGE, WELCOME_MESSAGE,
+        INFO_COMMAND_FAILURE_MESSAGE, INFO_COMMAND_WAIT_MESSAGE, PEER_CONNECT_FAILURE_MESSAGE,
+        PEER_CONNECT_WAIT_MESSAGE, PROBE_FAILURE_MESSAGE, PROBE_WAIT_MESSAGE, WELCOME_MESSAGE,
     },
     get_lnd::get_lnd,
-    utils::{get_connect_peer_message, get_probe_peer_message},
+    utils::{get_connect_peer_message, get_info_command_message, get_probe_peer_message},
 };
 
 #[derive(BotCommands, Clone)]
@@ -19,6 +19,8 @@ enum Command {
     Start,
     #[command(description = "Help Command")]
     Help,
+    #[command(description = "Get Node info /info <pubkey>")]
+    Info(String),
     #[command(description = "Connect to a peer /connect <pubkey@uri>")]
     Connect(String),
     #[command(description = "Probe a peer /probe <pubkey>")]
@@ -45,6 +47,28 @@ impl InitBot {
             Command::Help => {
                 bot.send_message(msg.chat.id, Command::descriptions().to_string())
                     .await?
+            }
+            Command::Info(uri) => {
+                let _ = tokio::spawn(async move {
+                    let mut client = get_lnd().await.expect("failed to get client");
+
+                    bot.send_message(msg.chat.id, INFO_COMMAND_WAIT_MESSAGE)
+                        .await?;
+
+                    let message = get_info_command_message(&mut client, &uri).await;
+
+                    let message = match message {
+                        Ok(n) => n,
+                        Err(e) => {
+                            log::error!("Failed to get node info {:?}", e);
+                            format!("{} {:?}", INFO_COMMAND_FAILURE_MESSAGE, e)
+                        }
+                    };
+
+                    bot.send_message(msg.chat.id, message).await
+                });
+
+                return Ok(());
             }
             Command::Connect(uri) => {
                 let _ = tokio::spawn(async move {

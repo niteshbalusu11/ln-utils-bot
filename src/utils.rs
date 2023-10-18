@@ -1,14 +1,18 @@
 use std::time::Instant;
 
 use anyhow::{bail, ensure};
+use chrono::{TimeZone, Utc};
 use lightning_probing::{probe_destination, ProbeDestination};
-use lnd_grpc_rust::lnrpc::{ConnectPeerRequest, DisconnectPeerRequest, LightningAddress};
+use lnd_grpc_rust::{
+    lnrpc::{ConnectPeerRequest, DisconnectPeerRequest, LightningAddress, NodeInfoRequest},
+    LndClient,
+};
 
 use anyhow::Result;
 
 use crate::constants::{
-    PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_SUCCESS_MESSAGE, PROBE_FAILURE_MESSAGE,
-    PROBE_SUCCESS_MESSAGE,
+    INFO_COMMAND_FAILURE_MESSAGE, PEER_CONNECT_FAILURE_MESSAGE, PEER_CONNECT_SUCCESS_MESSAGE,
+    PROBE_FAILURE_MESSAGE, PROBE_SUCCESS_MESSAGE,
 };
 
 pub async fn get_connect_peer_message(
@@ -121,4 +125,54 @@ pub async fn get_probe_peer_message(
 fn is_public_key(n: &str) -> anyhow::Result<bool, regex::Error> {
     let re = regex::Regex::new(r"(?i)^0[2-3][0-9A-F]{64}$")?;
     Ok(re.is_match(n))
+}
+
+pub async fn get_info_command_message(
+    client: &mut LndClient,
+    pubkey: &str,
+) -> anyhow::Result<String> {
+    if is_public_key(pubkey).is_err() || is_public_key(pubkey).unwrap() == false {
+        bail!("ExpectedValidHexPublicKey".to_string());
+    }
+
+    let node_info_request = NodeInfoRequest {
+        pub_key: pubkey.to_string(),
+        include_channels: true,
+    };
+
+    let res = client.lightning().get_node_info(node_info_request).await;
+
+    let message = match res {
+        Ok(n) => {
+            let res = n.into_inner();
+            let node = res.node.expect("FailedToGetNodeInfo");
+
+            let dt = Utc.timestamp_opt(node.last_update.into(), 0);
+            let formatted_date = dt.unwrap().to_string();
+
+            let known_features: Vec<&String> = node
+                .features
+                .values()
+                .filter(|&feature| feature.is_known)
+                .map(|feature| &feature.name)
+                .collect();
+
+            let reply = format!(
+                "Last Update: {}\n\n\
+                Pubkey: {}\n\n\
+                Alias: {}\n\n\
+                Number of Channels: {}\n\n\
+                Supported features: {:?}",
+                formatted_date, node.pub_key, node.alias, res.num_channels, known_features
+            );
+
+            format!("{}", reply)
+        }
+        Err(e) => {
+            log::error!("Failed to connect to peer {:?}", e);
+            format!("{} {:?}", INFO_COMMAND_FAILURE_MESSAGE, e)
+        }
+    };
+
+    return Ok(message);
 }
